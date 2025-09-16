@@ -1,0 +1,267 @@
+load("100307_res4d.mat")
+
+%% --- Part 1: Plot Residual Time Course for a Single Voxel ---
+% Extract the residual time series for the specified voxel and subject
+[n_voxel,n_time_points] = size(data);
+voxel_to_plot = 23;
+residual_ts = double(squeeze(data(voxel_to_plot,:))');
+
+fig = figure('Name', 'Residual Time Course', 'NumberTitle', 'off', ...
+             'Color', [0.95, 0.95, 0.95]); 
+ax = axes('Parent', fig, ...
+          'XColor', 'k', 'YColor', 'k', 'ZColor', 'k', ...
+          'Color', [1, 1, 1], ... 
+          'TickDir', 'in');
+hold(ax, 'on');
+plot(ax, residual_ts, 'b-');
+plot(ax, zeros(1, n_time_points), 'r--');
+title(ax, sprintf('Residual Time Series for Voxel [%d]', ...
+                  voxel_to_plot(1)), ...
+      'Color', 'k', 'FontSize', 14, 'FontWeight', 'bold');
+xlabel(ax, 'Time (seconds)', 'Color', 'k');
+ylabel(ax, 'Residual Value', 'Color', 'k');
+legend(ax, 'Residuals', 'Zero Line');
+grid(ax, 'on');
+
+fig = figure('Name', 'Residual Histogram');
+histogram(residual_ts, 50);
+title('Histogram of residual\_ts');
+xlabel('Value');
+ylabel('Frequency');
+grid on;
+
+%% --- Part 2: ACF and PACF Plots ---
+figure;
+subplot(2,1,1);
+autocorr(residual_ts);
+[acf, lags] = autocorr(residual_ts, 'NumLags', 20);
+[pacf, lags_pacf] = parcorr(residual_ts, 'NumLags', 20);
+title('Autocorrelation Function (ACF)');
+
+subplot(2,1,2);
+parcorr(residual_ts);
+title('Partial Autocorrelation Function (PACF)');
+%  ACF plot has significant spikes at lags 5, 10, 15. 
+% Gradual seasonal decay.
+%  
+
+%% --- Part 3: Stationarity and White Noise Check ---
+% Augmented Dickey-Fuller test (null: non-stationary)
+[h, pValue, stat, cValue] = adftest(residual_ts);
+if h == 1
+    fprintf('ADF Test: Series is stationary (p-value: %.4f)\n', pValue);
+else
+    fprintf('ADF Test: Series is non-stationary (p-value: %.4f)\n', pValue);
+end
+
+% KPSS test (null: stationary)
+[h, pValue] = kpsstest(residual_ts);
+if h == 0
+    fprintf('KPSS Test: Series is stationary (p-value: %.4f)\n', pValue);
+else
+    fprintf('KPSS Test: Series is non-stationary (p-value: %.4f)\n', pValue);
+end
+
+[h_lb, p_lb] = lbqtest(residual_ts, 'Lags', 1:10);
+disp('Ljung-Box Test:');
+fprintf('h = %d (1 = not white noise), p-value = %.4f\n', h_lb, p_lb);
+% Small p-values for the initial lags. 
+% The series is stationary and not a white noise.
+
+%% --- Part 4: Modeling ---
+T = length(residual_ts);
+s = 5;
+max_p = 3; 
+max_q = 3; 
+max_P = 2; 
+max_Q = 2; 
+p_vals = 0:max_p;
+q_vals = 0:max_q;
+P_vals = 0:max_P;
+Q_vals = 0:max_Q;
+
+[p_grid, q_grid, P_grid, Q_grid] = ndgrid(p_vals, q_vals, P_vals, Q_vals);
+params = [p_grid(:), q_grid(:), P_grid(:), Q_grid(:)];
+num_models = size(params, 1);
+results_cell = cell(num_models, 1);
+
+if isempty(gcp('nocreate'))
+    parpool;
+end
+
+fprintf('Starting parallel grid search for %d models...\n', num_models);
+
+parfor i = 1:num_models
+    p = params(i, 1);
+    q = params(i, 2);
+    P = params(i, 3);
+    Q = params(i, 4);
+    
+    T_worker = T;
+    s_worker = s;
+    
+    current_result = struct();
+    current_result.p = p;
+    current_result.q = q;
+    current_result.P = P;
+    current_result.Q = Q;
+
+    try
+        Mdl = arima('ARLags', 1:p, 'MALags', 1:q, ...
+                    'Seasonality', s_worker, ...
+                    'SARLags', s_worker:s_worker:(s_worker*P), ...
+                    'SMALags', s_worker:s_worker:(s_worker*Q));
+        
+        [EstMdl, ~, logL] = estimate(Mdl, residual_ts, 'Display','off'); 
+        numParams = p + q + P + Q;
+        [~, bic] = aicbic(logL, numParams + 1, T_worker); 
+        
+        current_result.BIC = bic;
+        current_result.LogLikelihood = logL;
+        current_result.EstMdl = EstMdl;
+        current_result.Error = false;
+
+    catch ME
+        fprintf('Failed for p=%d, q=%d, P=%d, Q=%d. Skipping.\n', p, q, P, Q);
+        current_result.BIC = inf;
+        current_result.LogLikelihood = NaN;
+        current_result.EstMdl = [];
+        current_result.Error = true;
+        current_result.ErrorMessage = ME.message;
+    end
+
+    results_cell{i} = current_result;
+end
+
+fprintf('... Parallel computation finished.\n');
+
+model_results = table('Size',[0 6], ...
+    'VariableTypes',{'double','double','double','double','double','double'}, ...
+    'VariableNames',{'p','q','P','Q','BIC','LogLikelihood'});
+bestBIC = inf;
+bestMdl = [];
+
+for i = 1:num_models
+    res = results_cell{i};
+    
+    if ~res.Error
+        newRow = {res.p, res.q, res.P, res.Q, res.BIC, res.LogLikelihood};
+        model_results = [model_results; newRow];
+        
+        if res.BIC < bestBIC
+            bestBIC = res.BIC;
+            bestMdl = res.EstMdl;
+        end
+    end
+end
+
+
+model_results = sortrows(model_results, 'BIC', 'ascend');
+
+disp('Top 3 models based on BIC:');
+disp(model_results(1:3,:))
+disp('The best model based on BIC is:');
+disp(bestMdl);
+
+
+%% --- Step 5: Model Diagnostic Checking ---
+bestMdl_1 = arima('ARLags', 2, 'MALags', 3, ...
+                                'Seasonality', 5, ...
+                                'SARLags', 5, 'SMALags', 5);
+EstMdl = estimate(bestMdl_1, residual_ts, Display="off");
+res = infer(EstMdl, residual_ts);
+
+% 1. Plot the residuals
+figure;
+subplot(2,2,1);
+plot(res);
+title('Model Residuals');
+grid on;
+
+% 2. ACF of residuals
+subplot(2,2,2);
+autocorr(res);
+title('ACF of Residuals');
+
+% 3. PACF of residuals
+subplot(2,2,3);
+parcorr(res);
+title('PACF of Residuals');
+
+% 5. Ljung-Box Q-test for residual autocorrelation
+% H0: The residuals are not autocorrelated 
+[h_lbq, pValue_lbq] = lbqtest(res);
+fprintf('--- Ljung-Box Test on Model Residuals ---\n');
+fprintf('Ljung-Box Test Statistic (h): %d\n', h_lbq);
+fprintf('p-value: %f\n', pValue_lbq);
+if h_lbq == 0
+    fprintf('Result: No significant residual autocorrelation.\n\n');
+else
+    fprintf('Result: Significant residual autocorrelation exists.\n\n');
+end
+
+%% --- Step 7: Detecting systematic mis-modeling ---
+% From the 2007 paper
+% Use FIR to model the shape of the error.
+% makes minimal assumptions about the shape of the mis-modeling
+% Check if the error is systematically correlated with the experimental task.
+
+% Set parameters, need to change
+TR = 2; 
+stim_onsets_sec = [30, 90, 150, 210, 270, 330, 390]; 
+fir_window_sec = 20; 
+x = 1; y = 1; subj = 1;
+voxel_residuals = Results(:, x, y, subj);
+
+num_time_points = size(voxel_residuals, 1);
+stim_onsets_tr = round(stim_onsets_sec / TR);
+fir_window_tr = round(fir_window_sec / TR);
+
+fir_design_matrix = zeros(num_time_points, fir_window_tr);
+
+% Create the FIR design matrix
+for i = 1:length(stim_onsets_tr)
+    onset = stim_onsets_tr(i);
+    
+    for j = 1:fir_window_tr
+        % The time point for the current lag (j) after the current onset (i)
+        event_time_point = onset + j - 1;
+        
+        % Ensure the time point is within the scan duration
+        if event_time_point <= num_time_points
+            % The j-th column of the matrix corresponds to the j-th TR after an event.
+            % Place a 1 at the corresponding time point.
+            fir_design_matrix(event_time_point, j) = 1;
+        end
+    end
+end
+
+% Fit the Linear Model to the Residual
+% Add a constant term (intercept) to the design matrix
+X = [ones(num_time_points, 1), fir_design_matrix];
+% Perform the linear regression, 
+% the traditional least-square solution is very sensitive to noise, though (2007).
+[beta_error, beta_ci] = regress(voxel_residuals, X);
+fir_coeffs = beta_error(2:end);
+fir_ci = beta_ci(2:end, :);
+
+
+time_axis_sec = (0:fir_window_tr-1) * TR;
+
+figure;
+hold on;
+plot([time_axis_sec(1), time_axis_sec(end)], [0, 0], 'k--', 'LineWidth', 1); 
+fill([time_axis_sec, fliplr(time_axis_sec)], [fir_ci(:,1)', fliplr(fir_ci(:,2)')], ...
+     [0.8 0.8 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.5);
+plot(time_axis_sec, fir_coeffs, 'b-o', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'MarkerSize', 4);
+hold off;
+
+title('Estimated Shape of Systematic Error in Residuals');
+xlabel('Time Since Stimulus Onset (s)');
+ylabel('Magnitude of Unmodeled Response (Beta)');
+legend({'', '95% Confidence Interval', 'Estimated Error Shape'}, 'Location', 'best');
+grid on;
+box on;
+
+% The significant coefficients identify the locations where the model HRF and the actual HRF differ.
+% The true BOLD signal was, on average, stronger than the model predicted
