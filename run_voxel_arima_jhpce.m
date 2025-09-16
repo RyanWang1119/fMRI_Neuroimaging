@@ -1,7 +1,19 @@
-% FILE: run_voxel_arima_jhpce.m
 function run_voxel_arima_jhpce()
     % This script is designed to be run non-interactively on the JHPCE cluster.
-    % It saves all results to a .mat file and NIfTI files.
+    % Get username from the environment to build the path to CanlabCore
+    jhed_id = getenv('USER');
+    canlab_core_path = fullfile('/home', jhed_id, 'CanlabCore');
+    if ~isfolder(canlab_core_path)
+        error('CanlabCore not found at %s. Please run the one-time setup.', canlab_core_path);
+    end
+    fprintf('Adding CanlabCore to path: %s\n', canlab_core_path);
+    addpath(genpath(canlab_core_path));
+
+    % The rest of your script follows...
+    fprintf('Starting ARIMA fitting job at %s\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
+    
+    % ... (The cluster-specific parpool setup)
+    % ... (The rest of your analysis code)
 
     fprintf('Starting ARIMA fitting job at %s\n', datestr(now));
 
