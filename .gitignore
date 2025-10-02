@@ -1,0 +1,11 @@
+# MATLAB & Simulink temporary files
+*.asv
+*.autosave
+*~
+*.bak
+*.mex*
+*.slx.original
+*.rwd
+
+# MATLAB project files (optional, depends on team workflow)
+*.prj
