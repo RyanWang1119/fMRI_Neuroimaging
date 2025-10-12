@@ -39,12 +39,11 @@ subject_id = subject_ids{i};
 fprintf('Processing Subject %d/%d: %s\n', i, n_subjects, subject_id);
 
 %% --- 1. Process LR and RL Runs for the Subject ---
-% Define paths for both potential runs
 file_LR = fullfile(base_dir, subject_id, 'LR', 'res4d.nii');
 file_RL = fullfile(base_dir, subject_id, 'RL', 'res4d.nii');
 
-qmaps_to_average = {}; % Cell array to hold the maps we generate
-template_dat_obj = []; % To store header info for saving the final map
+qmaps_to_average = {}; 
+template_dat_obj = []; 
 
 % --- Process LR Run ---
 if exist(file_LR, 'file')

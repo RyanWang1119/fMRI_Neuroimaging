@@ -21,7 +21,7 @@ group_q_stats_data = fmri_data(q_stat_filenames);
 fprintf('Performing t-test...\n');
 t_results_2tailed = ttest(group_q_stats_data);
 
-% Manually calculate one-tailed p-values for a right-tailed test (Q > 0)
+% Calculate one-tailed p-values for a right-tailed test (Q > 0)
 fprintf('Manually calculating right-tailed p-values...\n');
 t_stats = t_results_2tailed.dat;
 p_2tailed = t_results_2tailed.p;
