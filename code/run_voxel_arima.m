@@ -105,17 +105,24 @@ end
 fprintf('Finished model fitting.\n');
 
 %% --- 3. Save Results as NIFTI Brain Maps ---
+% This corrected section first creates a proper 3D template object from the 
+% 4D input data, then inserts the AR and MA order results before writing.
+
 fprintf('Saving AR and MA order maps...\n');
 
-% --- AR order map ---
-ar_map_obj = data_LR;
-ar_map_obj.dat = ar_order_map; 
+% 1. Create a 3D template by selecting the first volume from the original data.
+%    This ensures the new object's metadata correctly describes a 3D image.
+template_3d_obj = select_volumes(data_LR, 1);
+
+% --- Create and write the AR order map ---
+ar_map_obj = template_3d_obj; % Copy the clean 3D template
+ar_map_obj.dat = ar_order_map'; % Replace its data with the AR orders (note the transpose ')
 ar_map_obj.fullpath = fullfile(output_dir, [subject_id '_ar_order_map.nii']);
 write(ar_map_obj, 'overwrite');
 
-% --- MA order map ---
-ma_map_obj = data_LR; 
-ma_map_obj.dat = ma_order_map; 
+% --- Create and write the MA order map ---
+ma_map_obj = template_3d_obj; % Copy the clean 3D template
+ma_map_obj.dat = ma_order_map'; % Replace its data with the MA orders (note the transpose ')
 ma_map_obj.fullpath = fullfile(output_dir, [subject_id '_ma_order_map.nii']);
 write(ma_map_obj, 'overwrite');
 
