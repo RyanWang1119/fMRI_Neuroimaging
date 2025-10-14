@@ -1,10 +1,10 @@
-load("100307_res4d.mat")
+load("data\100307_res4d.mat")
 
 %% --- Part 1: Plot Residual Time Course for a Single Voxel ---
 % Extract the residual time series for the specified voxel and subject
 [n_voxel,n_time_points] = size(data);
 voxel_to_plot = 46;
-residual_ts = double(squeeze(data(voxel_to_plot,:))');
+residual_ts = double(squeeze(data(voxel_to_plot,:)));
 
 fig = figure('Name', 'Residual Time Course', 'NumberTitle', 'off', ...
              'Color', [0.95, 0.95, 0.95]); 
