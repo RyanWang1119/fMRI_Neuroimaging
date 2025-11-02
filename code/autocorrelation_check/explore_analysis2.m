@@ -1,0 +1,379 @@
+load("data\100307_res4d.mat")
+
+%% --- Part 1: Plot Residual Time Course for a Single Voxel ---
+% Extract the residual time series for the specified voxel and subject
+[n_voxel,n_time_points] = size(data);
+voxel_to_plot = 46;
+residual_ts = double(squeeze(data(voxel_to_plot,:)));
+
+fig = figure('Name', 'Residual Time Course', 'NumberTitle', 'off', ...
+             'Color', [0.95, 0.95, 0.95]); 
+ax = axes('Parent', fig, ...
+          'XColor', 'k', 'YColor', 'k', 'ZColor', 'k', ...
+          'Color', [1, 1, 1], ... 
+          'TickDir', 'in');
+hold(ax, 'on');
+plot(ax, residual_ts, 'b-');
+plot(ax, zeros(1, n_time_points), 'r--');
+title(ax, sprintf('Residual Time Series for Voxel [%d]', ...
+                  voxel_to_plot(1)), ...
+      'Color', 'k', 'FontSize', 14, 'FontWeight', 'bold');
+xlabel(ax, 'Time (seconds)', 'Color', 'k');
+ylabel(ax, 'Residual Value', 'Color', 'k');
+legend(ax, 'Residuals', 'Zero Line');
+grid(ax, 'on');
+
+fig = figure('Name', 'Residual Histogram');
+histogram(residual_ts, 50);
+title('Histogram of residual\_ts');
+xlabel('Value');
+ylabel('Frequency');
+grid on;
+
+%% --- Part 2: ACF and PACF Plots ---
+figure;
+subplot(2,1,1);
+autocorr(residual_ts);
+[acf, lags] = autocorr(residual_ts, 'NumLags', 20);
+[pacf, lags_pacf] = parcorr(residual_ts, 'NumLags', 20);
+title('Autocorrelation Function (ACF)');
+
+subplot(2,1,2);
+parcorr(residual_ts);
+title('Partial Autocorrelation Function (PACF)');
+
+
+%% --- Part 3: Stationarity and White Noise Check ---
+% Augmented Dickey-Fuller test (null: non-stationary)
+[h, pValue, stat, cValue] = adftest(residual_ts);
+if h == 1
+    fprintf('ADF Test: Series is stationary (p-value: %.4f)\n', pValue);
+else
+    fprintf('ADF Test: Series is non-stationary (p-value: %.4f)\n', pValue);
+end
+
+% KPSS test (null: stationary)
+[h, pValue] = kpsstest(residual_ts);
+if h == 0
+    fprintf('KPSS Test: Series is stationary (p-value: %.4f)\n', pValue);
+else
+    fprintf('KPSS Test: Series is non-stationary (p-value: %.4f)\n', pValue);
+end
+
+[h_lb, p_lb] = lbqtest(residual_ts, 'Lags', 1:10);
+disp('Ljung-Box Test:');
+fprintf('h = %d (1 = not white noise), p-value = %.4f\n', h_lb, p_lb);
+% Small p-values for the initial lags. 
+% The series is stationary and not a white noise.
+
+%% --- Part 4: Modeling ---
+T = length(residual_ts);
+s = 4;
+max_p = 3; 
+max_q = 3; 
+max_P = 2; 
+max_Q = 2; 
+p_vals = 0:max_p;
+q_vals = 0:max_q;
+P_vals = 0:max_P;
+Q_vals = 0:max_Q;
+
+[p_grid, q_grid, P_grid, Q_grid] = ndgrid(p_vals, q_vals, P_vals, Q_vals);
+params = [p_grid(:), q_grid(:), P_grid(:), Q_grid(:)];
+num_models = size(params, 1);
+results_cell = cell(num_models, 1);
+
+if isempty(gcp('nocreate'))
+    parpool;
+end
+
+parfor i = 1:num_models
+    p = params(i, 1);
+    q = params(i, 2);
+    P = params(i, 3);
+    Q = params(i, 4);
+    
+    T_worker = T;
+    s_worker = s;
+    
+    current_result = struct();
+    current_result.p = p;
+    current_result.q = q;
+    current_result.P = P;
+    current_result.Q = Q;
+
+    try
+        Mdl = arima('ARLags', 1:p, 'MALags', 1:q, ...
+                    'Seasonality', s_worker, ...
+                    'SARLags', s_worker:s_worker:(s_worker*P), ...
+                    'SMALags', s_worker:s_worker:(s_worker*Q));
+        
+        [EstMdl, ~, logL] = estimate(Mdl, residual_ts, 'Display','off'); 
+        numParams = p + q + P + Q;
+        [~, bic] = aicbic(logL, numParams + 1, T_worker); 
+        
+        current_result.BIC = bic;
+        current_result.LogLikelihood = logL;
+        current_result.EstMdl = EstMdl;
+        current_result.Error = false;
+
+    catch ME
+        fprintf('Failed for p=%d, q=%d, P=%d, Q=%d. Skipping.\n', p, q, P, Q);
+        current_result.BIC = inf;
+        current_result.LogLikelihood = NaN;
+        current_result.EstMdl = [];
+        current_result.Error = true;
+        current_result.ErrorMessage = ME.message;
+    end
+
+    results_cell{i} = current_result;
+end
+
+
+model_results = table('Size',[0 6], ...
+    'VariableTypes',{'double','double','double','double','double','double'}, ...
+    'VariableNames',{'p','q','P','Q','BIC','LogLikelihood'});
+bestBIC = inf;
+bestMdl = [];
+
+for i = 1:num_models
+    res = results_cell{i};
+    if ~res.Error
+        newRow = {res.p, res.q, res.P, res.Q, res.BIC, res.LogLikelihood};
+        model_results = [model_results; newRow];
+        
+        if res.BIC < bestBIC
+            bestBIC = res.BIC;
+            bestMdl = res.EstMdl;
+        end
+    end
+end
+
+
+model_results = sortrows(model_results, 'BIC', 'ascend');
+
+disp('Top 3 models based on BIC:');
+disp(model_results(1:3,:))
+disp('The best model based on BIC is:');
+disp(bestMdl);
+% ARIMA(2,0,1) Model Seasonally Integrated with Seasonal AR(5) and MA(10)
+
+%% --- Step 5: Model Diagnostic Checking ---
+EstMdl = estimate(bestMdl, residual_ts);
+res = infer(EstMdl, residual_ts);
+
+% 1. Plot the residuals
+figure;
+subplot(2,2,1);
+plot(res);
+title('Model Residuals');
+grid on;
+
+% 2. ACF of residuals
+subplot(2,2,2);
+autocorr(res);
+title('ACF of Residuals');
+
+% 3. PACF of residuals
+subplot(2,2,3);
+parcorr(res);
+title('PACF of Residuals');
+
+% 5. Ljung-Box Q-test for residual autocorrelation
+% H0: The residuals are not autocorrelated 
+[h_lbq, pValue_lbq] = lbqtest(res);
+fprintf('--- Ljung-Box Test on Model Residuals ---\n');
+fprintf('Ljung-Box Test Statistic (h): %d\n', h_lbq);
+fprintf('p-value: %f\n', pValue_lbq);
+if h_lbq == 0
+    fprintf('Result: No significant residual autocorrelation.\n\n');
+else
+    fprintf('Result: Significant residual autocorrelation exists.\n\n');
+end
+
+%% Spectral Analysis Using Fourier Transformation
+sub_data_dim = 100;
+non_zero_row_indices = find(any(data, 2));
+sub_data = data(non_zero_row_indices(1:min(sub_data_dim, end)), :);
+TR = 2; % Repetition Time in seconds. Need to change
+
+% Map 1: Stores the period in units of TRs 
+periodicity_map_TRs = nan(sub_data_dim, 1);
+% Map 2: Stores the frequency in Hertz (Hz)
+frequency_map_Hz = nan(sub_data_dim, 1);
+
+for i = 1:sub_data_dim
+    
+        voxel_residuals = squeeze(sub_data(i, :))';
+        preprocessed_residuals = detrend(voxel_residuals, 'constant'); 
+        N = n_time_points;
+        
+        %  Apply a Hanning window to reduce spectral leakage.
+        win = hann(N);
+        windowed_residuals = preprocessed_residuals .* win;
+        
+        power_spectrum = abs(fft(windowed_residuals)).^2 / sum(win.^2);
+        half_spectrum = power_spectrum(1:floor(N/2)+1);
+        
+        % Find Dominant Peak and Check for Significance 
+        search_spectrum = half_spectrum(2:end);
+        [peak_power, peak_idx_in_search] = max(search_spectrum); 
+        mean_power = mean(search_spectrum);
+        
+        if peak_power > 3 * mean_power
+            peak_idx = peak_idx_in_search + 1;
+                       
+            % Calculate the dominant period in TRs 
+            dominant_period_in_TRs = N / (peak_idx - 1);
+            % Calculate the dominant frequency in Hz
+            frequency_in_Hz = (peak_idx - 1) / (N * TR);
+            
+            periodicity_map_TRs(i) = dominant_period_in_TRs;
+            frequency_map_Hz(i) = frequency_in_Hz;         
+        end    
+end
+
+% Plot 1: Dominant Periodicity Map (in TRs)
+figure('Name', 'Dominant Periodicity Map');
+subplot(1, 2, 1);
+imagesc(periodicity_map_TRs);
+colorbar;
+title({'Dominant Period (Seasonality)', sprintf('Subject %d (in TRs)', 1)});
+ylabel('Indices');
+
+% Plot 2: Dominant Frequency Map (in Hz)
+subplot(1, 2, 2);
+imagesc(frequency_map_Hz);
+colorbar;
+title({'Dominant Frequency', sprintf('Subject %d (in Hz)', 1)});
+ylabel('Indices');
+
+all_values = periodicity_map_TRs(:);
+figure;
+h = histogram(all_values);
+
+%% Misfit severity map
+% From the 2008 paper.
+sw_bandwidth = [3, 5, 7];
+sw_kernel_type = 'uniform'; % 'uniform' / 'gaussian'
+
+sw_map = zeros(sub_data_dim, 1);
+
+for i = 1:sub_data_dim
+    voxel_residuals = squeeze(sub_data(i, :))';     
+    sw_map(i) = calculateSwStatistic(voxel_residuals, sw_bandwidth, sw_kernel_type);
+end
+
+function sw_max = calculateSwStatistic(residuals, bandwidths, kernel_type)
+   
+    residuals = detrend(residuals, 'constant'); 
+    sw_values = zeros(length(bandwidths), 1); 
+    for i = 1:length(bandwidths)
+        w = bandwidths(i);
+        window_size = 2*w + 1;
+
+        if strcmpi(kernel_type, 'uniform')
+            % Uniform kernel, normalized so that sum(K.^2) = 1
+            kernel = ones(1, window_size) / sqrt(window_size);
+        elseif strcmpi(kernel_type, 'gaussian')
+            % Gaussian kernel, normalized so that sum(K.^2) = 1
+            kernel = normpdf(-w:w, 0, w/2); 
+            kernel = kernel / sqrt(sum(kernel.^2));
+        end
+
+        % Convolve to get the moving average of residuals
+        Yw = conv(residuals, kernel, 'same');
+        sw_values(i) = max(abs(Yw));
+    end
+    sw_max = max(sw_values);
+end
+
+figure('Name', 'Diagnostic Maps for fMRI Residuals', 'NumberTitle', 'off', 'Position', [100 100 1500 400]);
+imagesc(sw_map);
+colorbar;
+title({'Misfit Severity Map', '(Sw Statistic)'});
+ylabel('Indices');
+axis square;
+
+
+%% Group-Level Model Misfit Analysis 
+
+% Analysis Parameters
+sw_bandwidths = [3, 5, 7]; 
+sw_kernel_type = 'uniform';
+mc_permutations = 1000;
+
+% --- Start the Parallel Pool ---
+if isempty(gcp('nocreate'))
+    parpool;
+end
+
+% --- Step 1: Calculate p-values for all voxels and subjects ---
+fprintf('Starting parallel p-value calculation for %d subjects...\n', num_subjects);
+all_p_values = zeros(dim_x, dim_y, num_subjects);
+
+for s = 1:num_subjects
+    fprintf('Processing Subject %d...\n', s);
+    
+    current_subject_p_values = zeros(dim_x, dim_y);
+    subject_data = Results(:, :, :, s);
+    
+    parfor x = 1:dim_x
+       
+        y_p_values = zeros(1, dim_y); 
+        for y = 1:dim_y
+            voxel_residuals = squeeze(subject_data(:, x, y));
+            
+            if var(voxel_residuals) == 0
+                y_p_values(y) = 1;
+                continue;
+            end
+            
+            y_p_values(y) = calculatePValueMC(voxel_residuals, sw_bandwidths, sw_kernel_type, mc_permutations);
+        end
+        
+        current_subject_p_values(x, :) = y_p_values;
+    end
+    
+    all_p_values(:, :, s) = current_subject_p_values;
+end
+
+% --- Helper Functions ---
+function p_val = calculatePValueMC(residuals, bandwidths, kernel_type, num_permutations)
+    observed_sw = calculateSwStatistic(residuals, bandwidths, kernel_type);
+    null_sw_distribution = zeros(num_permutations, 1);
+    for i = 1:num_permutations
+        permuted_residuals = residuals .* sign(randn(size(residuals)));
+        null_sw_distribution(i) = calculateSwStatistic(permuted_residuals, bandwidths, kernel_type);
+    end
+    p_val = (sum(null_sw_distribution >= observed_sw) + 1) / (num_permutations + 1);
+end
+
+%% --- Plot ---
+load("all_p_values.mat")
+[dim_t, dim_x, dim_y, num_subjects] = size(Results);
+sw_bandwidths = [3, 5, 7]; 
+sw_kernel_type = 'uniform';
+mc_permutations = 1000;
+fprintf('Combining p-values across subjects...\n');
+all_p_values(all_p_values == 0) = 1e-12; 
+log_p_values = log(all_p_values);
+Q_map = -2 * sum(log_p_values, 3);
+
+% --- Step 3: Determine Significance and Plot ---
+df = 2 * num_subjects;
+p_thresh = 0.05;
+q_critical = chi2inv(1 - p_thresh, df);
+Q_map_thresholded = Q_map;
+Q_map_thresholded(Q_map < q_critical) = 0;
+
+% Plotting 
+figure('Name', 'Group-Level Model Misfit Analysis', 'NumberTitle', 'off', 'Position', [100 100 1200 500]);
+subplot(1, 2, 1);
+imagesc(Q_map); colorbar;
+title({'Group-Level Misfit Map (Q Statistic)', sprintf('Chi-Square(%d df)', df)});
+xlabel('Y Dimension'); ylabel('X Dimension'); axis square;
+subplot(1, 2, 2);
+imagesc(Q_map_thresholded); colorbar;
+title({'Significant Misfit', sprintf('p < %.2f (Q > %.2f)', p_thresh, q_critical)});
+xlabel('Y Dimension'); ylabel('X Dimension'); axis square;

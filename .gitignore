@@ -9,3 +9,6 @@
 
 # MATLAB project files (optional, depends on team workflow)
 *.prj
+
+*.fig
+*.png
