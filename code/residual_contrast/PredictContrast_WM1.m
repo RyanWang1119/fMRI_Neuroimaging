@@ -4,6 +4,7 @@ clear; clc;
 STAGE     = getenv_default("STAGE","observed");  % observed | perm | merge
 DATA_FILE = getenv_default("DATA_FILE", fullfile(pwd,'HRF_Resid_WMblock_LR.mat'));
 OUTDIR    = getenv_default("OUTDIR", fullfile(getenv_default("HOME",pwd), 'jhpce_outputs_wmblock'));
+addpath(genpath('/users/rwang/CanLabCore'));
 if ~exist(OUTDIR,'dir'), mkdir(OUTDIR); end
 
 fprintf('Stage      : %s\n', STAGE);
