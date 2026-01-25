@@ -1,6 +1,6 @@
-dat = readmatrix('data\TAFC_mean.csv');
+dat = readmatrix('data\task_residual\observed_interpretation\TAFC_mean.csv');
 TR = 0.72; 
-load('data\WMblock_parallel_results.mat', 'TAFC');   
+load('data\task_residual\WMblock_parallel_results.mat', 'TAFC');   
 
 mean_accuracy = dat(:, 2:end);
 contrast_names = {

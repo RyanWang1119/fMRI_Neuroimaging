@@ -2,7 +2,7 @@ clear; clc;
 
 %% ------------------ Config & paths --------------------------------------
 STAGE     = getenv_default("STAGE","observed");  % observed | perm | merge
-DATA_FILE = getenv_default("DATA_FILE", fullfile(pwd,'HRF_Resid_WMblock_LR.mat'));
+DATA_FILE = getenv_default("DATA_FILE", fullfile(pwd,'data/HRF_Resid_WMblock_LR.mat'));
 OUTDIR    = getenv_default("OUTDIR", fullfile(getenv_default("HOME",pwd), 'jhpce_outputs_wmblock'));
 addpath(genpath('/users/rwang/CanLabCore'));
 if ~exist(OUTDIR,'dir'), mkdir(OUTDIR); end
@@ -12,7 +12,7 @@ fprintf('Data file  : %s\n', DATA_FILE);
 fprintf('Output dir : %s\n', OUTDIR);
 
 % Worker setup from SLURM; avoid thread oversubscription
-w = str2double(getenv('SLURM_CPUS_PER_TASK')); if isnan(w) || w < 1, w = 24; end
+w = str2double(getenv('SLURM_CPUS_PER_TASK')); if isnan(w) || w < 1, w = 8; end
 maxNumCompThreads(1);
 if isempty(gcp('nocreate')), parpool('Processes', w); end
 fprintf('Using %d MATLAB workers\n', w);
@@ -66,10 +66,9 @@ function run_observed_stage(DATA_FILE, OUTDIR, regions, time_points, subjects, n
         bs_idx_list{b} = randsample(trainN, trainN, true);
     end
 
-    Rconst = parallel.pool.Constant( ...
-        @() load(getenv_default("DATA_FILE", fullfile(pwd,'HRF_Resid_WMblock_LR.mat')), 'Results'), ...
-        @(S) permute(S.Results, [3 1 2 4]) ...
-    );
+    Rconst = parallel.pool.Constant(@() ...
+    permute(load(getenv_default("DATA_FILE", fullfile(pwd,'data/HRF_Resid_WMblock_LR.mat')), 'Results') ...
+            .Results, [3 1 2 4]) );
     CONDMATconst   = parallel.pool.Constant(CONDMAT);
     trainSubsConst = parallel.pool.Constant(trainSubs);
     testSubsConst  = parallel.pool.Constant(testSubs);
@@ -213,10 +212,9 @@ function run_permutation_chunk(DATA_FILE, OUTDIR, regions, time_points, subjects
     clear Sobs;
 
     % Workers load data directly (avoid broadcast)
-    Rconst = parallel.pool.Constant( ...
-        @() load(getenv_default("DATA_FILE", fullfile(pwd,'HRF_Resid_WMblock_LR.mat')), 'Results'), ...
-        @(S) permute(S.Results, [3 1 2 4]) ...
-    );
+    Rconst = parallel.pool.Constant(@() ...
+    permute(load(getenv_default("DATA_FILE", fullfile(pwd,'data/HRF_Resid_WMblock_LR.mat')), 'Results') ...
+            .Results, [3 1 2 4]) );
     CONDMATconst   = parallel.pool.Constant(CONDMAT);
     trainSubsConst = parallel.pool.Constant(trainSubs);
     testSubsConst  = parallel.pool.Constant(testSubs);
