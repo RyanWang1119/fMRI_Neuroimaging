@@ -1,4 +1,4 @@
-load('data\task_residual\HRF_Resid_WMblock_LR.mat')
+load('data\task_residual\WMcHRFderiv.mat')
 
 %% Mean of mean
 % dim: [regions, time_points, subjects]
