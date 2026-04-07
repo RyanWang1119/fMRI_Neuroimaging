@@ -1,0 +1,26 @@
+WM_places = WMcHRF(:,:,:,6) - WMcHRF(:,:,:,2);   % regions x time x subjects
+X_places = permute(WM_places, [3 1 2]);           % subjects x regions x time
+
+res_places = region_cluster(X_places, ...
+    'ConditionName', 'WM cHRF places (2bk-0bk)', ...
+    'MakePlots', false);
+
+stab_places = region_cluster_stability(X_places, res_places, ...
+    'NBoot', 500, ...
+    'MakePlots', true);
+
+disp(stab_places.cluster_table)
+
+%%
+WM_body = WMsHRF(:,:,:,6) - WMsHRF(:,:,:,2);   % regions x time x subjects
+X_body = permute(WM_body, [3 1 2]);           % subjects x regions x time
+
+res_body = region_cluster(X_body, ...
+    'ConditionName', 'WM sHRF body (2bk-0bk)', ...
+    'MakePlots', false);
+
+stab_body = region_cluster_stability(X_body, res_body, ...
+    'NBoot', 500, ...
+    'MakePlots', true);
+
+disp(stab_body.cluster_table)
