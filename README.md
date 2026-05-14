@@ -1,0 +1,1 @@
+This repository contains the analysis pipeline and code used for the thesis investigating systematic, task-dependent information within fMRI residuals. Using datasets from the Human Connectome Project (HCP), this project tests whether residuals contain structured information that can reliably predict task states.
