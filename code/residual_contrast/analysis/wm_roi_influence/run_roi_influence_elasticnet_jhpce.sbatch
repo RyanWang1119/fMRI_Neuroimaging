@@ -3,7 +3,7 @@
 # JHPCE submission template for the WM ROI influence elastic-net module.
 #
 # Example:
-#   sbatch --export=ALL,REPO_DIR=/users/rwang/fMRI,HRF_MODEL=cHRF,CONTRAST_NAME=Body_LoadDiff_vs_Face_LoadDiff,WINDOW_SEC="4.32 8.64" \
+#   sbatch --export=ALL,REPO_DIR=/users/rwang/fMRI_Neuroimaging,HRF_MODEL=cHRF,CONTRAST_NAME=Body_LoadDiff_vs_Face_LoadDiff,WINDOW_SEC="4.32 8.64" \
 #     code/residual_contrast/analysis/wm_roi_influence/run_roi_influence_elasticnet_jhpce.sbatch
 #
 # The script writes outputs under:
@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-/users/rwang/fMRI}"
+REPO_DIR="${REPO_DIR:-/users/rwang/fMRI_Neuroimaging}"
 HRF_MODEL="${HRF_MODEL:-cHRF}"
 CONTRAST_NAME="${CONTRAST_NAME:-Body_LoadDiff_vs_Face_LoadDiff}"
 WINDOW_SEC="${WINDOW_SEC:-4.32 8.64}"
