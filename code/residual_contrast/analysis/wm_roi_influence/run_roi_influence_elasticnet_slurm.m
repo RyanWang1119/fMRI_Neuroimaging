@@ -7,6 +7,7 @@ function out = run_roi_influence_elasticnet_slurm()
 %   CONTRAST_INDEX  optional integer 1..6
 %   WINDOW_SEC      required "start end", e.g. "4.32 8.64"
 %   OUTDIR          optional output root
+%   DATA_DIR        optional folder containing WMcHRF.mat, WMcHRFderiv.mat, WMsHRF.mat
 %   NREPEATS        optional outer repeat count
 %   NPERM           optional sign-flip permutation count
 %   USE_PARFOR      optional 1/0
@@ -16,6 +17,11 @@ addpath(moduleDir);
 
 cfg = struct();
 cfg.hrfModelName = getenv_default('HRF_MODEL', 'cHRF');
+
+dataDir = getenv('DATA_DIR');
+if ~isempty(dataDir)
+    cfg.dataDir = dataDir;
+end
 
 contrastIndex = str2double(getenv('CONTRAST_INDEX'));
 if isfinite(contrastIndex)

@@ -8,6 +8,7 @@ if ~isfield(cfg, 'hrfModelName') || isempty(cfg.hrfModelName)
 end
 
 dataFile = resolve_hrf_model_file(cfg);
+validate_data_file_payload(dataFile);
 vars = whos('-file', dataFile);
 varNames = {vars.name};
 
@@ -26,6 +27,37 @@ else
     if isempty(dataVariable)
         error('Could not find WM residual array variable in %s. Expected variable Results.', dataFile);
     end
+end
+
+function validate_data_file_payload(dataFile)
+info = dir(dataFile);
+if isempty(info)
+    error('WM residual data file not found: %s', dataFile);
+end
+
+% The real WM HRF-model .mat files are hundreds of MB. A tiny file is often
+% a Git LFS pointer or failed copy, which MATLAB reports only as "not a
+% valid MAT-file" unless we catch it first.
+if info.bytes < 1024 * 1024
+    preview = '';
+    fid = fopen(dataFile, 'r');
+    if fid >= 0
+        cleanup = onCleanup(@() fclose(fid)); %#ok<NASGU>
+        bytes = fread(fid, min(info.bytes, 256), '*char')';
+        preview = strtrim(bytes);
+    end
+
+    if contains(preview, 'git-lfs.github.com') || contains(preview, 'version https://git-lfs')
+        error(['Data file is a Git LFS pointer, not the real MAT payload: %s (%d bytes). ', ...
+               'Run git lfs pull on JHPCE or set cfg.dataDir/DATA_DIR to the folder containing the full WMcHRF.mat files.'], ...
+               dataFile, info.bytes);
+    else
+        error(['Data file is too small to be the WM residual MAT payload: %s (%d bytes). ', ...
+               'Expected a full WMcHRF/WMcHRFderiv/WMsHRF file, usually hundreds of MB. ', ...
+               'Set cfg.dataDir/DATA_DIR to the real data folder or replace this placeholder.'], ...
+               dataFile, info.bytes);
+    end
+end
 end
 
 S = load(dataFile, dataVariable);
