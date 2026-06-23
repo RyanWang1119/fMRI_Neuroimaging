@@ -157,7 +157,8 @@ save_roi_influence_outputs(cfg, runDir, windowTRs, windowSeconds, subjectIDs, ..
     runMetadata, softwareVersionInfo, timestamp);
 
 if cfg.plots.makePlots
-    plot_roi_influence_summary(summaryTable, outerResults, cfg, runDir);
+    plotDir = get_plot_output_dir(runDir, cfg);
+    plot_roi_influence_summary(summaryTable, outerResults, cfg, plotDir);
 end
 
 out = struct();
@@ -235,6 +236,7 @@ if ~isfield(cfg, 'plots') || ~isstruct(cfg.plots)
 end
 cfg.plots = set_default(cfg.plots, 'makePlots', true);
 cfg.plots = set_default(cfg.plots, 'topN', 30);
+cfg.plots = set_default(cfg.plots, 'outputSubdir', 'plots');
 
 if ~strcmpi(cfg.analysisMode, 'windowAverage')
     error('Only cfg.analysisMode = ''windowAverage'' is implemented. Time-resolved mode is reserved for later.');
@@ -296,6 +298,14 @@ s = char(s);
 s = regexprep(s, '[^A-Za-z0-9_+-]+', '_');
 s = regexprep(s, '_+', '_');
 s = regexprep(s, '^_|_$', '');
+end
+
+function plotDir = get_plot_output_dir(runDir, cfg)
+if isfield(cfg, 'plots') && isfield(cfg.plots, 'outputSubdir') && ~isempty(cfg.plots.outputSubdir)
+    plotDir = fullfile(runDir, cfg.plots.outputSubdir);
+else
+    plotDir = runDir;
+end
 end
 
 function info = collect_software_version_info()

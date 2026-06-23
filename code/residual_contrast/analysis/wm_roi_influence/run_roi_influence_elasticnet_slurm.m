@@ -11,6 +11,7 @@ function out = run_roi_influence_elasticnet_slurm()
 %   NREPEATS        optional outer repeat count
 %   NPERM           optional sign-flip permutation count
 %   USE_PARFOR      optional 1/0
+%   MAKE_PLOTS      optional 1/0; default 0 for cluster compute jobs
 
 moduleDir = fileparts(mfilename('fullpath'));
 addpath(moduleDir);
@@ -58,6 +59,9 @@ useParfor = str2double(getenv('USE_PARFOR'));
 if isfinite(useParfor)
     cfg.outer.useParfor = useParfor ~= 0;
 end
+
+makePlots = str2double(getenv_default('MAKE_PLOTS', '0'));
+cfg.plots.makePlots = isfinite(makePlots) && makePlots ~= 0;
 
 if isfield(cfg, 'outer') && isfield(cfg.outer, 'useParfor') && cfg.outer.useParfor
     start_slurm_parpool();

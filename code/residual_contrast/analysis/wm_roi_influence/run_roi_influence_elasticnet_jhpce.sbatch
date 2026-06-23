@@ -11,6 +11,8 @@
 #
 # Reuse the same output root for cHRF, cHRFderiv, and sHRF so
 # shared_subject_splits.mat is reused exactly across models.
+# Heavy cluster jobs default to MAKE_PLOTS=0. Generate plots locally from
+# the saved roi_influence_*.mat with run_roi_influence_local_postprocess.m.
 
 #SBATCH --job-name=wm_roi_enet
 #SBATCH --partition=shared
@@ -33,6 +35,7 @@ OUTDIR="${OUTDIR:-${REPO_DIR}/data/task_residual/roi_influence_elasticnet}"
 NREPEATS="${NREPEATS:-200}"
 NPERM="${NPERM:-5000}"
 USE_PARFOR="${USE_PARFOR:-1}"
+MAKE_PLOTS="${MAKE_PLOTS:-0}"
 
 cd "${REPO_DIR}"
 
@@ -50,6 +53,7 @@ export OUTDIR
 export NREPEATS
 export NPERM
 export USE_PARFOR
+export MAKE_PLOTS
 
 echo "Repository: ${REPO_DIR}"
 echo "DATA_DIR: ${DATA_DIR}"
@@ -60,6 +64,7 @@ echo "OUTDIR: ${OUTDIR}"
 echo "NREPEATS: ${NREPEATS}"
 echo "NPERM: ${NPERM}"
 echo "USE_PARFOR: ${USE_PARFOR}"
+echo "MAKE_PLOTS: ${MAKE_PLOTS}"
 echo "SLURM_CPUS_PER_TASK: ${SLURM_CPUS_PER_TASK:-unset}"
 
 matlab -nodisplay -nosplash -r "addpath(genpath('code/residual_contrast/analysis/wm_roi_influence')); run_roi_influence_elasticnet_slurm; exit"

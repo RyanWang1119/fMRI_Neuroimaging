@@ -26,3 +26,28 @@ cfg.contrastName = 'Body_LoadDiff_vs_Face_LoadDiff';
 cfg.windowSec = [4.32 8.64];
 run_roi_influence_elasticnet(cfg);
 ```
+
+### Cluster/Local Split
+
+Run heavy nested model fitting and sign-flip inference on JHPCE with plotting disabled:
+
+```bash
+cd /users/rwang/fMRI_Neuroimaging
+export REPO_DIR=/users/rwang/fMRI_Neuroimaging
+export DATA_DIR=/users/rwang
+export HRF_MODEL=cHRF
+export CONTRAST_NAME=Body_LoadDiff_vs_Face_LoadDiff
+export WINDOW_SEC="4.32 8.64"
+export MAKE_PLOTS=0
+sbatch --export=ALL code/residual_contrast/analysis/wm_roi_influence/run_roi_influence_elasticnet_jhpce.sbatch
+```
+
+After the `.mat` file exists, generate light local outputs:
+
+```matlab
+addpath(genpath('code/residual_contrast/analysis/wm_roi_influence'));
+resultFile = 'data/task_residual/roi_influence_elasticnet/Body_LoadDiff_vs_Face_LoadDiff/cHRF/roi_influence_cHRF_Body_LoadDiff_vs_Face_LoadDiff.mat';
+run_roi_influence_local_postprocess(resultFile);
+```
+
+Plots are written to a `plots/` subfolder. If all three HRF model `.mat` files are provided, local postprocess also writes `hrf_model_comparison.csv` with descriptive deltas only.
